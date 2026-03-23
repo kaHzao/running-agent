@@ -104,7 +104,7 @@ Volume Biasa: 60-80 km/minggu
 # GEMINI AI
 # ============================================================
 def analyze_with_gemini(data_text):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 
     prompt = f"""Kamu adalah pelatih lari pribadi yang ahli dan suportif.
 Analisa data lari berikut dan berikan laporan dalam Bahasa Indonesia yang spesifik.
