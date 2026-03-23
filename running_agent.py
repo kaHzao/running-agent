@@ -136,10 +136,12 @@ Format laporan (gunakan emoji, jangan generik):
         "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.7}
     }
 
-    response = requests.post(url, json=payload)
+   response = requests.post(url, json=payload)
     data = response.json()
+    if "candidates" not in data:
+        error_info = data.get("error", {})
+        raise Exception(f"Gemini error {error_info.get('code', '?')}: {error_info.get('message', str(data))}")
     return data["candidates"][0]["content"]["parts"][0]["text"]
-
 # ============================================================
 # TELEGRAM
 # ============================================================
