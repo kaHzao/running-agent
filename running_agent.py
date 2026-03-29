@@ -9,9 +9,20 @@ import os
 STRAVA_CLIENT_ID      = os.environ.get("STRAVA_CLIENT_ID", "214802")
 STRAVA_CLIENT_SECRET  = os.environ.get("STRAVA_CLIENT_SECRET", "")
 STRAVA_REFRESH_TOKEN  = os.environ.get("STRAVA_REFRESH_TOKEN", "")
-OPENROUTER_API_KEY    = os.environ.get("OPENROUTER_API_KEY", "")
+ANTHROPIC_API_KEY     = os.environ.get("ANTHROPIC_API_KEY", "")
 TELEGRAM_BOT_TOKEN    = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID      = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+# ============================================================
+# HELPER — Senin awal minggu
+# ============================================================
+def get_week_bounds(weeks_ago=0):
+    today = datetime.now()
+    monday_this_week = today - timedelta(days=today.weekday())
+    monday_this_week = monday_this_week.replace(hour=0, minute=0, second=0, microsecond=0)
+    monday_start = monday_this_week - timedelta(weeks=weeks_ago)
+    sunday_end = monday_start + timedelta(days=7)
+    return int(monday_start.timestamp()), int(sunday_end.timestamp())
 
 # ============================================================
 # STRAVA
@@ -44,10 +55,9 @@ def get_activity_detail(token, activity_id):
 
 def get_weekly_stats(token, weeks_ago=0):
     headers = {"Authorization": f"Bearer {token}"}
-    start = datetime.now() - timedelta(days=7 * (weeks_ago + 1))
-    end = datetime.now() - timedelta(days=7 * weeks_ago)
+    after, before = get_week_bounds(weeks_ago)
     response = requests.get(
-        f"https://www.strava.com/api/v3/athlete/activities?after={int(start.timestamp())}&before={int(end.timestamp())}&per_page=30",
+        f"https://www.strava.com/api/v3/athlete/activities?after={after}&before={before}&per_page=30",
         headers=headers
     )
     return response.json()
@@ -66,6 +76,12 @@ def summarize_week(activities):
     hr_list = [a.get("average_heartrate", 0) for a in runs if a.get("average_heartrate")]
     avg_hr = sum(hr_list) / len(hr_list) if hr_list else 0
     return total_km, total_sesi, total_menit, avg_hr
+
+def get_week_label(weeks_ago=0):
+    today = datetime.now()
+    monday = today - timedelta(days=today.weekday()) - timedelta(weeks=weeks_ago)
+    sunday = monday + timedelta(days=6)
+    return f"{monday.strftime('%d %b')} - {sunday.strftime('%d %b')}"
 
 def format_activity_data(activity, detail, this_week, last_week):
     lap_summary = ""
@@ -104,13 +120,13 @@ Suffer Score: {activity.get('suffer_score', 'N/A')}
 
 === DATA PER KM ===
 {lap_summary}
-=== MINGGU INI ===
+=== MINGGU INI ({get_week_label(0)}) ===
 Total Jarak : {tw_km:.1f} km
 Total Sesi  : {tw_sesi} lari
 Total Waktu : {tw_menit} menit
 HR Rata2    : {tw_hr:.1f} bpm
 
-=== MINGGU LALU ===
+=== MINGGU LALU ({get_week_label(1)}) ===
 Total Jarak : {lw_km:.1f} km
 Total Sesi  : {lw_sesi} lari
 Total Waktu : {lw_menit} menit
@@ -142,12 +158,12 @@ Tanggal     : {last_date}
 Nama        : {last_name}
 Jarak       : {last_dist:.2f} km
 
-=== MINGGU INI ===
+=== MINGGU INI ({get_week_label(0)}) ===
 Total Jarak : {tw_km:.1f} km
 Total Sesi  : {tw_sesi} lari
 Total Waktu : {tw_menit} menit
 
-=== MINGGU LALU ===
+=== MINGGU LALU ({get_week_label(1)}) ===
 Total Jarak : {lw_km:.1f} km
 Total Sesi  : {lw_sesi} lari
 Total Waktu : {lw_menit} menit
@@ -159,82 +175,98 @@ Volume      : 60-80 km/minggu
 """
 
 # ============================================================
-# OPENROUTER AI
+# CLAUDE AI
 # ============================================================
-def analyze_with_openrouter(data_text, is_rest_day=False):
+def analyze_with_claude(data_text, is_rest_day=False):
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/kaHzao/running-agent",
-        "X-Title": "Running Agent Kahzao"
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
     }
 
+    format_rules = """
+ATURAN FORMAT — WAJIB DIIKUTI:
+- Tulis dalam Bahasa Indonesia
+- Setiap bagian dipisah dengan SATU baris kosong
+- Judul bagian pakai emoji + huruf kapital, contoh: 🏃 RINGKASAN SESI
+- Isi bagian langsung di bawah judul, tanpa bullet point (*)
+- Jangan pakai format markdown seperti **bold** atau *italic*
+- Gunakan angka spesifik dari data
+- Setiap poin baru mulai dari baris baru
+- Antara judul dan isi TIDAK ada baris kosong
+- Antara satu bagian dan bagian berikutnya ADA satu baris kosong
+"""
+
     if is_rest_day:
-        prompt = f"""Kamu adalah pelatih lari pribadi yang suportif dan memotivasi.
-Hari ini atlet tidak lari. Berikan pesan harian dalam Bahasa Indonesia berdasarkan data berikut.
+        prompt = f"""{format_rules}
+
+Kamu adalah pelatih lari pribadi yang suportif. Hari ini atlet tidak lari.
+Buat pesan harian berdasarkan data berikut:
 
 {data_text}
 
-Format pesan (gunakan emoji, singkat dan memotivasi):
+Tulis dengan format ini:
 
-HARI ISTIRAHAT
-[Apresiasi bahwa istirahat adalah bagian penting dari latihan]
+🛌 HARI ISTIRAHAT
+[2-3 kalimat apresiasi istirahat sebagai bagian latihan]
 
-STATUS MINGGUAN
-[Ringkasan progress minggu ini vs minggu lalu dengan angka spesifik]
+📊 STATUS MINGGUAN
+[Ringkasan progress minggu ini vs minggu lalu dengan angka]
 
-COUNTDOWN LOMBA
+⏳ COUNTDOWN LOMBA
 [Hitung mundur dan motivasi menuju lomba 2 Mei 2026 sub-21 menit]
 
-SARAN HARI INI
-[Rekomendasi konkret untuk hari istirahat: nutrisi, tidur, stretching, dll]
+💆 SARAN HARI INI
+[Rekomendasi konkret: nutrisi, tidur, stretching]
 
-RENCANA LATIHAN BERIKUTNYA
-[Saran sesi lari berikutnya yang spesifik: jarak, pace target, tipe latihan]"""
+🏃 RENCANA LATIHAN BERIKUTNYA
+[Saran sesi lari berikutnya: jarak, pace target, tipe latihan]"""
+
     else:
-        prompt = f"""Kamu adalah pelatih lari pribadi yang ahli dan suportif.
-Analisa data lari berikut dan berikan laporan dalam Bahasa Indonesia yang spesifik.
+        prompt = f"""{format_rules}
+
+Kamu adalah pelatih lari pribadi yang ahli. Analisa data lari berikut:
 
 {data_text}
 
-Format laporan (gunakan emoji):
+Tulis dengan format ini:
 
-RINGKASAN SESI
-[Ringkasan singkat performa hari ini berdasarkan data]
+🏃 RINGKASAN SESI
+[2-3 kalimat ringkasan performa hari ini]
 
-ANALISA PERFORMA
+📊 ANALISA PERFORMA
 [Analisa pace, HR, cadence per km dengan angka spesifik]
 
-TREN MINGGUAN
-[Bandingkan minggu ini vs minggu lalu secara spesifik dengan angka]
+📈 TREN MINGGUAN
+[Bandingkan minggu ini vs minggu lalu dengan angka]
 
-KESIAPAN LOMBA Sub-21 Menit 2 Mei 2026
-[Estimasi gap dan kesiapan hitung berdasarkan pace saat ini]
+🎯 KESIAPAN LOMBA SUB-21 MENIT
+[Estimasi gap dan kesiapan berdasarkan pace saat ini]
 
-PERHATIAN
+⚠️ PERHATIAN
 [Tanda overtraining atau hal yang perlu diwaspadai]
 
-REKOMENDASI SESI BERIKUTNYA
+💡 REKOMENDASI SESI BERIKUTNYA
 [Saran latihan konkret dan spesifik]"""
 
     payload = {
-        "model": "google/gemma-3-4b-it:free",
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 1024
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": 1024,
+        "messages": [{"role": "user", "content": prompt}]
     }
 
     response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
+        "https://api.anthropic.com/v1/messages",
         headers=headers,
         json=payload
     )
     data = response.json()
 
-    if "choices" not in data:
+    if "content" not in data:
         error_info = data.get("error", {})
-        raise Exception(f"OpenRouter error: {error_info.get('message', str(data))}")
+        raise Exception(f"Claude error: {error_info.get('message', str(data))}")
 
-    return data["choices"][0]["message"]["content"]
+    return data["content"][0]["text"]
 
 # ============================================================
 # TELEGRAM
@@ -266,17 +298,15 @@ def main():
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
         if activity and activity_date in [today, yesterday]:
-            # Ada lari baru — kirim analisa lengkap
             detail = get_activity_detail(token, activity["id"])
             data_text = format_activity_data(activity, detail, this_week, last_week)
-            print("Menganalisa lari dengan OpenRouter AI...")
-            analysis = analyze_with_openrouter(data_text, is_rest_day=False)
+            print("Menganalisa lari dengan Claude AI...")
+            analysis = analyze_with_claude(data_text, is_rest_day=False)
             message = f"Laporan Lari - {datetime.now().strftime('%d %b %Y')}\n\n{analysis}"
         else:
-            # Tidak ada lari — kirim motivasi + rencana
             data_text = format_rest_day_data(this_week, last_week, activity)
             print("Hari istirahat — kirim motivasi...")
-            analysis = analyze_with_openrouter(data_text, is_rest_day=True)
+            analysis = analyze_with_claude(data_text, is_rest_day=True)
             message = f"Pesan Harian - {datetime.now().strftime('%d %b %Y')}\n\n{analysis}"
 
         send_telegram(message)
