@@ -2,6 +2,7 @@ import requests
 from datetime import datetime, timedelta
 import time
 import os
+import random
 
 # ============================================================
 # KONFIGURASI — ambil dari GitHub Secrets
@@ -14,6 +15,30 @@ TELEGRAM_BOT_TOKEN    = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID      = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 # ============================================================
+# QUOTE MOTIVASI LARI
+# ============================================================
+QUOTES = [
+    "Lari bukan tentang menjadi lebih baik dari orang lain. Ini tentang menjadi lebih baik dari dirimu kemarin.",
+    "Setiap langkah yang kamu ambil hari ini adalah investasi untuk finish line esok hari.",
+    "Rasa sakit itu sementara. Bangga itu selamanya.",
+    "Tubuhmu bisa melakukan hampir segalanya. Pikiranmu yang perlu diyakinkan.",
+    "Pelari terbaik bukan yang tercepat, tapi yang tidak pernah berhenti.",
+    "Jarak sub-3 jam tidak dibangun dalam satu hari, tapi setiap hari membangunnya.",
+    "Ketika kakimu berat, biarkan hatimu yang meringankan langkahmu.",
+    "Lari adalah percakapan antara pikiran dan tubuh. Pastikan pikiranmu selalu menang.",
+    "Setiap kilometer yang kamu tempuh hari ini adalah kilometer yang tidak perlu kamu takuti di hari lomba.",
+    "Tidak ada latihan yang sia-sia. Semuanya menghitung.",
+    "Sub-3 jam bukan mimpi. Itu rencana yang sedang kamu jalankan setiap hari.",
+    "Istirahat bukan kelemahan. Istirahat adalah bagian dari strategi juara.",
+    "Pelari sejati tahu kapan harus mendorong dan kapan harus mundur.",
+    "Marathon bukan tentang 42km terakhir. Tapi tentang semua km yang kamu latih sebelumnya.",
+    "Bangun pagi, lari, tidur, ulangi. Itulah resep sub-3 jam.",
+]
+
+def get_random_quote():
+    return random.choice(QUOTES)
+
+# ============================================================
 # HELPER — Senin awal minggu
 # ============================================================
 def get_week_bounds(weeks_ago=0):
@@ -23,6 +48,12 @@ def get_week_bounds(weeks_ago=0):
     monday_start = monday_this_week - timedelta(weeks=weeks_ago)
     sunday_end = monday_start + timedelta(days=7)
     return int(monday_start.timestamp()), int(sunday_end.timestamp())
+
+def get_week_label(weeks_ago=0):
+    today = datetime.now()
+    monday = today - timedelta(days=today.weekday()) - timedelta(weeks=weeks_ago)
+    sunday = monday + timedelta(days=6)
+    return f"{monday.strftime('%d %b')} - {sunday.strftime('%d %b')}"
 
 # ============================================================
 # STRAVA
@@ -76,12 +107,6 @@ def summarize_week(activities):
     hr_list = [a.get("average_heartrate", 0) for a in runs if a.get("average_heartrate")]
     avg_hr = sum(hr_list) / len(hr_list) if hr_list else 0
     return total_km, total_sesi, total_menit, avg_hr
-
-def get_week_label(weeks_ago=0):
-    today = datetime.now()
-    monday = today - timedelta(days=today.weekday()) - timedelta(weeks=weeks_ago)
-    sunday = monday + timedelta(days=6)
-    return f"{monday.strftime('%d %b')} - {sunday.strftime('%d %b')}"
 
 def format_activity_data(activity, detail, this_week, last_week):
     lap_summary = ""
@@ -137,9 +162,8 @@ Jarak       : {km_diff_str} km dibanding minggu lalu
 Sesi        : {sesi_diff_str} sesi dibanding minggu lalu
 
 === PROFIL ATLET ===
-Target      : Sub-21 menit untuk 5km (lomba 2 Mei 2026)
-HR Istirahat: ~43 bpm
-Cadence     : 174-176 spm
+Target      : Sub-3:00 Marathon 2028
+HR Istirahat: 41-45 bpm
 Volume      : 60-80 km/minggu
 """
 
@@ -151,7 +175,7 @@ def format_rest_day_data(this_week, last_week, last_activity):
     last_dist = last_activity.get("distance", 0) / 1000 if last_activity else 0
 
     return f"""
-HARI INI TIDAK ADA LARI - {datetime.now().strftime('%d %B %Y')}
+HARI ISTIRAHAT - {datetime.now().strftime('%d %B %Y')}
 
 === AKTIVITAS TERAKHIR ===
 Tanggal     : {last_date}
@@ -169,8 +193,8 @@ Total Sesi  : {lw_sesi} lari
 Total Waktu : {lw_menit} menit
 
 === PROFIL ATLET ===
-Target      : Sub-21 menit untuk 5km (lomba 2 Mei 2026)
-Sisa waktu  : {(datetime(2026, 5, 2) - datetime.now()).days} hari menuju lomba
+Target      : Sub-3:00 Marathon 2028
+HR Istirahat: 41-45 bpm
 Volume      : 60-80 km/minggu
 """
 
@@ -200,7 +224,7 @@ ATURAN FORMAT — WAJIB DIIKUTI:
     if is_rest_day:
         prompt = f"""{format_rules}
 
-Kamu adalah pelatih lari pribadi yang suportif. Hari ini atlet tidak lari.
+Kamu adalah pelatih lari pribadi yang suportif. Hari ini atlet istirahat.
 Buat pesan harian berdasarkan data berikut:
 
 {data_text}
@@ -208,19 +232,16 @@ Buat pesan harian berdasarkan data berikut:
 Tulis dengan format ini:
 
 🛌 HARI ISTIRAHAT
-[2-3 kalimat apresiasi istirahat sebagai bagian latihan]
+[2-3 kalimat apresiasi istirahat sebagai bagian penting dari latihan menuju Sub-3:00 Marathon 2028]
 
 📊 STATUS MINGGUAN
-[Ringkasan progress minggu ini vs minggu lalu dengan angka]
-
-⏳ COUNTDOWN LOMBA
-[Hitung mundur dan motivasi menuju lomba 2 Mei 2026 sub-21 menit]
+[Ringkasan progress minggu ini vs minggu lalu dengan angka spesifik]
 
 💆 SARAN HARI INI
-[Rekomendasi konkret: nutrisi, tidur, stretching]
+[Rekomendasi konkret untuk hari istirahat: nutrisi, tidur, stretching]
 
 🏃 RENCANA LATIHAN BERIKUTNYA
-[Saran sesi lari berikutnya: jarak, pace target, tipe latihan]"""
+[Saran sesi lari berikutnya yang spesifik: jarak, pace target, tipe latihan sesuai target Sub-3:00 Marathon]"""
 
     else:
         prompt = f"""{format_rules}
@@ -238,16 +259,16 @@ Tulis dengan format ini:
 [Analisa pace, HR, cadence per km dengan angka spesifik]
 
 📈 TREN MINGGUAN
-[Bandingkan minggu ini vs minggu lalu dengan angka]
+[Bandingkan minggu ini vs minggu lalu dengan angka spesifik]
 
-🎯 KESIAPAN LOMBA SUB-21 MENIT
-[Estimasi gap dan kesiapan berdasarkan pace saat ini]
+🎯 KESIAPAN TARGET SUB-3:00 MARATHON 2028
+[Analisa kesiapan berdasarkan pace dan volume saat ini menuju target Sub-3:00]
 
 ⚠️ PERHATIAN
 [Tanda overtraining atau hal yang perlu diwaspadai]
 
 💡 REKOMENDASI SESI BERIKUTNYA
-[Saran latihan konkret dan spesifik]"""
+[Saran latihan konkret dan spesifik sesuai target Sub-3:00 Marathon]"""
 
     payload = {
         "model": "claude-sonnet-4-20250514",
@@ -295,19 +316,20 @@ def main():
 
         activity_date = activity.get("start_date_local", "")[:10] if activity else ""
         today = datetime.now().strftime("%Y-%m-%d")
-        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
-        if activity and activity_date in [today, yesterday]:
+        quote = get_random_quote()
+
+        if activity and activity_date == today:
             detail = get_activity_detail(token, activity["id"])
             data_text = format_activity_data(activity, detail, this_week, last_week)
             print("Menganalisa lari dengan Claude AI...")
             analysis = analyze_with_claude(data_text, is_rest_day=False)
-            message = f"Laporan Lari - {datetime.now().strftime('%d %b %Y')}\n\n{analysis}"
+            message = f"Laporan Lari - {datetime.now().strftime('%d %b %Y')}\n\n{analysis}\n\n💬 {quote}"
         else:
             data_text = format_rest_day_data(this_week, last_week, activity)
             print("Hari istirahat — kirim motivasi...")
             analysis = analyze_with_claude(data_text, is_rest_day=True)
-            message = f"Pesan Harian - {datetime.now().strftime('%d %b %Y')}\n\n{analysis}"
+            message = f"Pesan Harian - {datetime.now().strftime('%d %b %Y')}\n\n{analysis}\n\n💬 {quote}"
 
         send_telegram(message)
         print("Pesan berhasil dikirim ke Telegram!")
