@@ -4,9 +4,6 @@ import time
 import os
 import random
 
-# ============================================================
-# KONFIGURASI — ambil dari GitHub Secrets
-# ============================================================
 STRAVA_CLIENT_ID      = os.environ.get("STRAVA_CLIENT_ID", "214802")
 STRAVA_CLIENT_SECRET  = os.environ.get("STRAVA_CLIENT_SECRET", "")
 STRAVA_REFRESH_TOKEN  = os.environ.get("STRAVA_REFRESH_TOKEN", "")
@@ -14,9 +11,6 @@ ANTHROPIC_API_KEY     = os.environ.get("ANTHROPIC_API_KEY", "")
 TELEGRAM_BOT_TOKEN    = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID      = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-# ============================================================
-# QUOTE MOTIVASI LARI
-# ============================================================
 QUOTES = [
     "Lari bukan tentang menjadi lebih baik dari orang lain. Ini tentang menjadi lebih baik dari dirimu kemarin.",
     "Setiap langkah yang kamu ambil hari ini adalah investasi untuk finish line esok hari.",
@@ -33,14 +27,36 @@ QUOTES = [
     "Pelari sejati tahu kapan harus mendorong dan kapan harus mundur.",
     "Marathon bukan tentang 42km terakhir. Tapi tentang semua km yang kamu latih sebelumnya.",
     "Bangun pagi, lari, tidur, ulangi. Itulah resep sub-3 jam.",
+    "Kecepatan datang dari konsistensi, bukan dari terburu-buru.",
+    "Satu kilometer hari ini lebih baik dari nol kilometer kemarin.",
+    "Tubuh yang kuat dibangun dari kebiasaan kecil yang dilakukan setiap hari.",
+    "Jangan hitung jarak yang tersisa. Hitung langkah yang sudah kamu ambil.",
+    "Hujan, panas, lelah — pelari sejati tetap keluar.",
+    "Pace-mu hari ini mungkin lambat, tapi kamu masih lebih cepat dari orang yang tidur di rumah.",
+    "Setiap pelari sub-3 jam pernah berlari lambat. Kuncinya mereka tidak berhenti.",
+    "Kaki akan berhenti, tapi tekad tidak boleh.",
+    "Saat kamu ingin berhenti, ingat kenapa kamu mulai.",
+    "Latihan yang berat membuat lomba terasa mudah.",
+    "Jangan takut lambat, takutlah berhenti.",
+    "Konsistensi mengalahkan intensitas dalam jangka panjang.",
+    "Setiap pagi adalah kesempatan baru untuk menjadi lebih kuat.",
+    "Marathon dimulai dari langkah pertama, bukan dari garis start.",
+    "Tubuhmu adalah mesin terbaik yang pernah ada. Rawat dan latih dengan baik.",
+    "Progress bukan selalu terlihat hari ini, tapi pasti terasa di finish line.",
+    "Lari bukan hanya olahraga. Ini adalah meditasi bergerak.",
+    "Semakin keras latihan, semakin mudah lomba.",
+    "Percayai prosesnya. Sub-3 jam adalah hasil dari ribuan kilometer latihan.",
+    "Tubuhmu selalu bisa lebih dari yang kamu pikir.",
+    "Jadikan lari sebagai kebiasaan, bukan beban.",
+    "Setiap tetes keringat adalah bukti kerja kerasmu.",
+    "Finish line terasa manis karena start line terasa berat.",
+    "Pelari tidak lahir. Pelari dibentuk oleh konsistensi.",
+    "Hari ini mungkin berat, tapi kamu lebih kuat dari rasa beratmu.",
 ]
 
 def get_random_quote():
     return random.choice(QUOTES)
 
-# ============================================================
-# HELPER — Senin awal minggu
-# ============================================================
 def get_week_bounds(weeks_ago=0):
     today = datetime.now()
     monday_this_week = today - timedelta(days=today.weekday())
@@ -55,9 +71,13 @@ def get_week_label(weeks_ago=0):
     sunday = monday + timedelta(days=6)
     return f"{monday.strftime('%d %b')} - {sunday.strftime('%d %b')}"
 
-# ============================================================
-# STRAVA
-# ============================================================
+def get_day_of_week():
+    days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+    return days[datetime.now().weekday()]
+
+def get_days_into_week():
+    return datetime.now().weekday() + 1
+
 def get_strava_token():
     response = requests.post("https://www.strava.com/oauth/token", data={
         "client_id": STRAVA_CLIENT_ID,
@@ -127,8 +147,16 @@ def format_activity_data(activity, detail, this_week, last_week):
     sesi_diff = tw_sesi - lw_sesi
     sesi_diff_str = f"+{sesi_diff}" if sesi_diff >= 0 else f"{sesi_diff}"
 
+    hari_ini = get_day_of_week()
+    hari_ke = get_days_into_week()
+
     return f"""
-DATA LARI - {datetime.now().strftime('%d %B %Y')}
+DATA LARI - {datetime.now().strftime('%d %B %Y')} ({hari_ini})
+
+KONTEKS PENTING:
+Hari ini {hari_ini}, hari ke-{hari_ke} dari 7 dalam minggu ini.
+Mileage minggu ini WAJAR lebih kecil dari minggu lalu karena minggu belum selesai.
+Jangan interpretasikan perbedaan volume sebagai penurunan performa.
 
 === AKTIVITAS TERBARU ===
 Nama        : {activity.get('name', '-')}
@@ -145,13 +173,13 @@ Suffer Score: {activity.get('suffer_score', 'N/A')}
 
 === DATA PER KM ===
 {lap_summary}
-=== MINGGU INI ({get_week_label(0)}) ===
+=== MINGGU INI ({get_week_label(0)}) — Hari ke-{hari_ke} dari 7 ===
 Total Jarak : {tw_km:.1f} km
 Total Sesi  : {tw_sesi} lari
 Total Waktu : {tw_menit} menit
 HR Rata2    : {tw_hr:.1f} bpm
 
-=== MINGGU LALU ({get_week_label(1)}) ===
+=== MINGGU LALU ({get_week_label(1)}) — Lengkap 7 hari ===
 Total Jarak : {lw_km:.1f} km
 Total Sesi  : {lw_sesi} lari
 Total Waktu : {lw_menit} menit
@@ -174,20 +202,27 @@ def format_rest_day_data(this_week, last_week, last_activity):
     last_name = last_activity.get("name", "-") if last_activity else "-"
     last_dist = last_activity.get("distance", 0) / 1000 if last_activity else 0
 
+    hari_ini = get_day_of_week()
+    hari_ke = get_days_into_week()
+
     return f"""
-HARI ISTIRAHAT - {datetime.now().strftime('%d %B %Y')}
+HARI ISTIRAHAT - {datetime.now().strftime('%d %B %Y')} ({hari_ini})
+
+KONTEKS PENTING:
+Hari ini {hari_ini}, hari ke-{hari_ke} dari 7 dalam minggu ini.
+Mileage minggu ini WAJAR lebih kecil karena minggu belum selesai.
 
 === AKTIVITAS TERAKHIR ===
 Tanggal     : {last_date}
 Nama        : {last_name}
 Jarak       : {last_dist:.2f} km
 
-=== MINGGU INI ({get_week_label(0)}) ===
+=== MINGGU INI ({get_week_label(0)}) — Hari ke-{hari_ke} dari 7 ===
 Total Jarak : {tw_km:.1f} km
 Total Sesi  : {tw_sesi} lari
 Total Waktu : {tw_menit} menit
 
-=== MINGGU LALU ({get_week_label(1)}) ===
+=== MINGGU LALU ({get_week_label(1)}) — Lengkap 7 hari ===
 Total Jarak : {lw_km:.1f} km
 Total Sesi  : {lw_sesi} lari
 Total Waktu : {lw_menit} menit
@@ -198,9 +233,6 @@ HR Istirahat: 41-45 bpm
 Volume      : 60-80 km/minggu
 """
 
-# ============================================================
-# CLAUDE AI
-# ============================================================
 def analyze_with_claude(data_text, is_rest_day=False):
     headers = {
         "x-api-key": ANTHROPIC_API_KEY,
@@ -209,66 +241,71 @@ def analyze_with_claude(data_text, is_rest_day=False):
     }
 
     format_rules = """
-ATURAN FORMAT — WAJIB DIIKUTI:
-- Tulis dalam Bahasa Indonesia
-- Setiap bagian dipisah dengan SATU baris kosong
-- Judul bagian pakai emoji + huruf kapital, contoh: 🏃 RINGKASAN SESI
-- Isi bagian langsung di bawah judul, tanpa bullet point (*)
-- Jangan pakai format markdown seperti **bold** atau *italic*
-- Gunakan angka spesifik dari data
-- Setiap poin baru mulai dari baris baru
-- Antara judul dan isi TIDAK ada baris kosong
-- Antara satu bagian dan bagian berikutnya ADA satu baris kosong
+ATURAN FORMAT WAJIB:
+- Bahasa Indonesia
+- Setiap bagian dipisah SATU baris kosong
+- Judul: emoji + HURUF KAPITAL, contoh: 🏃 RINGKASAN SESI
+- Isi langsung di bawah judul tanpa baris kosong
+- DILARANG bullet point (*) dan markdown (**bold** atau *italic*)
+- Setiap poin baru = baris baru
 """
 
     if is_rest_day:
         prompt = f"""{format_rules}
 
 Kamu adalah pelatih lari pribadi yang suportif. Hari ini atlet istirahat.
-Buat pesan harian berdasarkan data berikut:
+Data: {data_text}
 
-{data_text}
+PENTING: Jangan bandingkan mileage minggu ini vs minggu lalu seolah keduanya lengkap.
+Minggu ini baru hari ke berapa — sebutkan itu, dan bilang mileage segini wajar.
 
-Tulis dengan format ini:
+Format:
 
 🛌 HARI ISTIRAHAT
-[2-3 kalimat apresiasi istirahat sebagai bagian penting dari latihan menuju Sub-3:00 Marathon 2028]
+[Apresiasi istirahat sebagai bagian strategi menuju Sub-3:00 Marathon 2028]
 
 📊 STATUS MINGGUAN
-[Ringkasan progress minggu ini vs minggu lalu dengan angka spesifik]
+[Progress minggu ini — sebutkan ini baru hari ke berapa, mileage wajar segini]
 
 💆 SARAN HARI INI
-[Rekomendasi konkret untuk hari istirahat: nutrisi, tidur, stretching]
+[Rekomendasi nutrisi, tidur, stretching]
 
 🏃 RENCANA LATIHAN BERIKUTNYA
-[Saran sesi lari berikutnya yang spesifik: jarak, pace target, tipe latihan sesuai target Sub-3:00 Marathon]"""
+[Saran sesi lari berikutnya: jarak, pace, tipe latihan]"""
 
     else:
         prompt = f"""{format_rules}
 
-Kamu adalah pelatih lari pribadi yang ahli. Analisa data lari berikut:
-
+Kamu adalah pelatih lari pribadi yang ahli. Analisa data lari ini:
 {data_text}
 
-Tulis dengan format ini:
+PENTING TREN MINGGUAN:
+Minggu ini baru hari ke berapa — jangan bilang volume turun jika memang belum selesai seminggu.
+Bandingkan secara proporsional dan adil.
+
+PENTING PROGRESS SUB-3:00:
+Fokus pada PERKEMBANGAN POSITIF — apakah pace membaik, HR lebih efisien, konsistensi membaik.
+Beri gambaran realistis tapi memotivasi tentang perjalanan menuju Sub-3:00.
+
+Format:
 
 🏃 RINGKASAN SESI
-[2-3 kalimat ringkasan performa hari ini]
+[Ringkasan performa hari ini]
 
 📊 ANALISA PERFORMA
-[Analisa pace, HR, cadence per km dengan angka spesifik]
+[Pace, HR, cadence per km dengan angka spesifik]
 
 📈 TREN MINGGUAN
-[Bandingkan minggu ini vs minggu lalu dengan angka spesifik]
+[Konteks adil — sebutkan ini baru hari ke berapa dalam minggu]
 
-🎯 KESIAPAN TARGET SUB-3:00 MARATHON 2028
-[Analisa kesiapan berdasarkan pace dan volume saat ini menuju target Sub-3:00]
+🎯 PROGRESS MENUJU SUB-3:00 MARATHON 2028
+[Fokus perkembangan positif dan area yang membaik]
 
 ⚠️ PERHATIAN
-[Tanda overtraining atau hal yang perlu diwaspadai]
+[Hanya jika ada hal yang benar-benar perlu diwaspadai]
 
 💡 REKOMENDASI SESI BERIKUTNYA
-[Saran latihan konkret dan spesifik sesuai target Sub-3:00 Marathon]"""
+[Saran konkret sesuai target Sub-3:00 Marathon]"""
 
     payload = {
         "model": "claude-sonnet-4-20250514",
@@ -289,9 +326,6 @@ Tulis dengan format ini:
 
     return data["content"][0]["text"]
 
-# ============================================================
-# TELEGRAM
-# ============================================================
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     chunks = [message[i:i+4096] for i in range(0, len(message), 4096)]
@@ -302,9 +336,6 @@ def send_telegram(message):
         })
         time.sleep(0.5)
 
-# ============================================================
-# MAIN
-# ============================================================
 def main():
     print("Running Agent dimulai...")
 
@@ -316,7 +347,6 @@ def main():
 
         activity_date = activity.get("start_date_local", "")[:10] if activity else ""
         today = datetime.now().strftime("%Y-%m-%d")
-
         quote = get_random_quote()
 
         if activity and activity_date == today:
